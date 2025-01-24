@@ -1,0 +1,8 @@
+{
+    "author" : ["h3mul"],
+    "install_msg" : "Thank you for installing H3mul's Cog Repo!",
+    "name" : "h3mul-cogs",
+    "short" : "Personal cogs for Red-DiscordBot!",
+    "description" : "Personal cogs for Red-DiscordBot!",
+    "tags" : ["utility", "alerting", "audit"]
+}
