@@ -1,10 +1,13 @@
 services:
   bot-test:
     image: phasecorex/red-discordbot:full
+    env_file: red-discordbot.env
     environment:
       PREFIX: "?"
+      EXTRA_ARGS: --debug
     volumes:
       - red-discordbot-data:/data
+      - ../:/test-cogs
 
 volumes:
   red-discordbot-data:
