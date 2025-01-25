@@ -12,6 +12,8 @@ from notifymeon.types import ListenEventType
 
 RequestType = Literal["discord_deleted_user", "owner", "user", "user_strict"]
 
+CHANNEL_LINK_BASE="https://discord.com/channels/"
+
 _ = Translator("NotifyMeOn", __file__)
 log = logging.getLogger("NotifyMeOn")
 
@@ -54,10 +56,6 @@ class NotifyMeOn(commands.Cog):
             for eventTypeName in guildConfig:
                 self.guild_events[guild][ListenEventType(eventTypeName)] = set(guildConfig[eventTypeName])
 
-
-    async def cog_load(self) -> None:
-        log.debug("NotifyMeOn Cog loaded!")
-
     @commands.guild_only()
     @commands.hybrid_command()
     @app_commands.allowed_installs(guilds=True)
@@ -78,7 +76,7 @@ class NotifyMeOn(commands.Cog):
         events = self.guild_events[ctx.guild]
 
         if eventType not in events:
-            events[eventType] = []
+            events[eventType] = set()
 
         if user_id in events[eventType]:
             events[eventType].remove(user_id)
@@ -101,6 +99,41 @@ class NotifyMeOn(commands.Cog):
         userList = events[ListenEventType.ON_AUDIT_LOG_ENTRY]
 
         for userId in userList:
-            user = entry.guild.get_member(userId)
+            user: discord.Member = entry.guild.get_member(userId)
             if user:
-                await user.send(_("Detected a new log entry in {guild}").format(guild=entry.guild.name))
+                await user.send(embed=await self.auditLogEntryToEmbed(entry))
+
+    async def auditLogEntryToEmbed(self, entry: discord.AuditLogEntry) -> discord.Embed:
+        guild = entry.guild
+        url = CHANNEL_LINK_BASE + str(guild.id)
+        target = "[{caption}]({link})".format(caption=guild.name, link=url)
+
+        if isinstance(entry.target, discord.abc.GuildChannel):
+            channel = guild.get_channel(entry.target.id)
+            url = channel.jump_url
+            target = url
+
+        embed = discord.Embed(title="NotifyMeOn AuditLogEntry Alert", description="Detected a new audit log entry in\n{target}".format(target=target))
+
+        authorUser: discord.Member = guild.get_member(entry.user_id)
+        if authorUser:
+            embed.set_author(name=authorUser.name, icon_url=authorUser.avatar.url)
+
+        if isinstance(entry.target, discord.Member):
+            embed.add_field(name="Target", inline=False, value=entry.target.name)
+        elif isinstance(entry.target, discord.User):
+            embed.add_field(name="Target", inline=False, value=entry.target.name)
+        elif isinstance(entry.target, discord.Role):
+            embed.add_field(name="Target", inline=False, value=entry.target.name)
+
+        embed.add_field(name="Action", inline=False, value=entry.action.name)
+
+        if entry.changes:
+            change_attrs = [attr for attr in dir(entry.before) if not attr.startswith('__')]
+            for attr in change_attrs:
+                embed.add_field(name=attr, inline=False, value="`{before}`\n`{after}`".format(
+                    before=getattr(entry.before, attr),
+                    after=getattr(entry.after, attr)
+                ))
+
+        return embed
