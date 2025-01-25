@@ -1,0 +1,10 @@
+services:
+  bot-test:
+    image: phasecorex/red-discordbot:full
+    environment:
+      PREFIX: "?"
+    volumes:
+      - red-discordbot-data:/data
+
+volumes:
+  red-discordbot-data:

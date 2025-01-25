@@ -1,0 +1,3 @@
+creation_rules:
+  - path_regex: .?\.env
+    pgp: A2AF5A4B747411B2D6B9331CFA018F24752F2F6E
