@@ -1,7 +1,6 @@
 import logging
-import json
 
-from typing import Dict, List, Literal, Optional, Set
+from typing import Dict, List, Literal, Optional, Set, Tuple
 
 import discord
 from redbot.core import commands, app_commands, Config
@@ -87,6 +86,14 @@ class NotifyMeOn(commands.Cog):
 
         await self.save_config(ctx.guild)
 
+
+    @commands.guild_only()
+    @commands.hybrid_command()
+    @app_commands.allowed_installs(guilds=True)
+    async def testauditlognotification(self, ctx: commands.Context) -> None:
+        async for entry in ctx.guild.audit_logs(limit=1):
+            await ctx.author.send(embed=await self.auditLogEntryToEmbed(entry))
+
     @commands.Cog.listener()
     async def on_audit_log_entry_create(self, entry: discord.AuditLogEntry):
 
@@ -113,27 +120,48 @@ class NotifyMeOn(commands.Cog):
             url = channel.jump_url
             target = url
 
-        embed = discord.Embed(title="NotifyMeOn AuditLogEntry Alert", description="Detected a new audit log entry in\n{target}".format(target=target))
+        embed = discord.Embed(title=_("NotifyMeOn AuditLogEntry Alert"), description=_("Detected a new audit log entry in\n{target}").format(target=target))
 
         authorUser: discord.Member = guild.get_member(entry.user_id)
         if authorUser:
             embed.set_author(name=authorUser.name, icon_url=authorUser.avatar.url)
 
-        if isinstance(entry.target, discord.Member):
-            embed.add_field(name="Target", inline=False, value=entry.target.name)
-        elif isinstance(entry.target, discord.User):
-            embed.add_field(name="Target", inline=False, value=entry.target.name)
-        elif isinstance(entry.target, discord.Role):
-            embed.add_field(name="Target", inline=False, value=entry.target.name)
+        embed.add_field(name=_("Target"), inline=True, value=self.printDiscordObject(entry.target))
+        if entry.extra:
+            embed.add_field(name=_("Extra"), inline=True, value=self.printDiscordObject(entry.extra))
+        embed.add_field(name=_("Action"), inline=True, value=entry.action.name)
 
-        embed.add_field(name="Action", inline=False, value=entry.action.name)
+        if entry.category == discord.AuditLogActionCategory.update:
+            for (attr, afterValue) in entry.after:
+                beforeValue = getattr(entry.before, attr)
 
-        if entry.changes:
-            change_attrs = [attr for attr in dir(entry.before) if not attr.startswith('__')]
-            for attr in change_attrs:
-                embed.add_field(name=attr, inline=False, value="`{before}`\n`{after}`".format(
-                    before=getattr(entry.before, attr),
-                    after=getattr(entry.after, attr)
-                ))
+                result = afterValue
+                if isinstance(afterValue, list):
+                    result = self.printIterableChange(beforeValue, afterValue)
+                elif isinstance(afterValue, discord.Permissions):
+                    result = self.printPermissionsChange(beforeValue, afterValue)
+                embed.add_field(name=attr, inline=False, value=self.printDiscordObject(result))
 
         return embed
+
+    def printDiscordObject(self, target: discord.Object) -> str:
+        # if hasattr(target, '__iter__'):
+        #     return "\n - ".join([self.printDiscordObject(item) for item in target])
+        if hasattr(target, "name"):
+            return "{name}: **{value}**".format(name=target.__class__.__name__, value=target.name)
+        return str(target)
+
+    def printPermissionsChange(self, before: discord.Permissions, after: discord.Permissions) -> str:
+        permChanges = []
+        for (attr, value) in after:
+            if getattr(before, attr) != value:
+                permChanges.append("`{sign} {attr}`".format(attr=attr, sign="+" if value else "-"))
+        return "\n".join(permChanges)
+    
+    def printIterableChange(self, before: List[any], after: List[any]):
+        listChanges = []
+        for item in set(before) - set(after):
+            listChanges.append("`-` {value}".format(value=self.printDiscordObject(item)))
+        for item in set(after) - set(before):
+            listChanges.append("`+` {value}".format(value=self.printDiscordObject(item)))
+        return "\n".join(listChanges)
