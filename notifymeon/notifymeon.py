@@ -90,8 +90,9 @@ class NotifyMeOn(commands.Cog):
     @commands.guild_only()
     @commands.hybrid_command()
     @app_commands.allowed_installs(guilds=True)
-    async def testauditlognotification(self, ctx: commands.Context) -> None:
-        async for entry in ctx.guild.audit_logs(limit=1):
+    async def testauditlognotification(self, ctx: commands.Context, num: int = 1) -> None:
+        limit = max(min(num, 50), 1)
+        async for entry in ctx.guild.audit_logs(limit=limit):
             await ctx.author.send(embed=await self.auditLogEntryToEmbed(entry))
 
     @commands.Cog.listener()
@@ -131,7 +132,7 @@ class NotifyMeOn(commands.Cog):
             embed.add_field(name=_("Extra"), inline=True, value=self.printDiscordObject(entry.extra))
         embed.add_field(name=_("Action"), inline=True, value=entry.action.name)
 
-        if entry.category == discord.AuditLogActionCategory.update:
+        if entry.after:
             for (attr, afterValue) in entry.after:
                 beforeValue = getattr(entry.before, attr)
 
@@ -140,7 +141,7 @@ class NotifyMeOn(commands.Cog):
                     result = self.printIterableChange(beforeValue, afterValue)
                 elif isinstance(afterValue, discord.Permissions):
                     result = self.printPermissionsChange(beforeValue, afterValue)
-                embed.add_field(name=attr, inline=False, value=self.printDiscordObject(result))
+                embed.add_field(name=attr, inline=True, value=self.printDiscordObject(result))
 
         return embed
 
