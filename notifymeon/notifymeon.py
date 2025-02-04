@@ -128,9 +128,14 @@ class NotifyMeOn(commands.Cog):
             embed.set_author(name=authorUser.name, icon_url=authorUser.avatar.url)
 
         embed.add_field(name=_("Target"), inline=True, value=self.printDiscordObject(entry.target))
-        if entry.extra:
-            embed.add_field(name=_("Extra"), inline=True, value=self.printDiscordObject(entry.extra))
         embed.add_field(name=_("Action"), inline=True, value=entry.action.name)
+
+        if entry.extra:
+            extra = ""
+            if isinstance(entry.extra, discord.audit_logs._AuditLogProxy):
+                embed.add_field(name=_("Extra"), inline=False, value=self.printAttributes(entry.extra))
+            else:
+                embed.add_field(name=_("Extra"), inline=True, value=self.printDiscordObject(entry.extra))
 
         if entry.after:
             for (attr, afterValue) in entry.after:
@@ -144,6 +149,10 @@ class NotifyMeOn(commands.Cog):
                 embed.add_field(name=attr, inline=True, value=self.printDiscordObject(result))
 
         return embed
+
+    def printAttributes(self, target: any) -> str:
+        values = ["_{name}:_ {value}".format(name=attr, value=self.printDiscordObject(getattr(target,attr))) for attr in dir(target) if not attr.startswith('__') ]
+        return "\n".join(values)
 
     def printDiscordObject(self, target: discord.Object) -> str:
         # if hasattr(target, '__iter__'):
