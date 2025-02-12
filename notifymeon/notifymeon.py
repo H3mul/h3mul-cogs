@@ -7,7 +7,7 @@ from redbot.core import commands, app_commands, Config
 from redbot.core.bot import Red
 from redbot.core.i18n import Translator
 
-from notifymeon.types import ListenEventType
+from notifymeon.types import ListenEventType, FilterType
 
 RequestType = Literal["discord_deleted_user", "owner", "user", "user_strict"]
 
@@ -38,14 +38,13 @@ class NotifyMeOn(commands.Cog):
 
     async def save_config(self) -> None:
         for guild in self.guild_events:
-            await self.save_config(guild)
+            await self.save_events(guild)
 
-    async def save_config(self, guild: discord.Guild) -> None:
-        newConfig: Dict[str, List[str]] = {}
+    async def save_events(self, guild: discord.Guild) -> None:
+        newEvents: Dict[str, List[str]] = {}
         for eventType in self.guild_events[guild]:
-            newConfig[eventType.value] = list(self.guild_events[guild][eventType])
-
-        await self.config.guild(guild).events.set(newConfig)
+            newEvents[eventType.value] = list(self.guild_events[guild][eventType])
+        await self.config.guild(guild).events.set(newEvents)
 
     async def load_config(self, guild: discord.Guild) -> None:
         if guild not in self.guild_events:
@@ -53,26 +52,36 @@ class NotifyMeOn(commands.Cog):
 
             self.guild_events[guild] = {}
             for eventTypeName in guildConfig:
-                self.guild_events[guild][ListenEventType(eventTypeName)] = set(guildConfig[eventTypeName])
+                self.guild_events[guild][ListenEventType(eventTypeName.replace('_', ''))] = set(guildConfig[eventTypeName])
+        return self.guild_events[guild]   
 
     @commands.guild_only()
-    @commands.hybrid_command()
+    @commands.hybrid_group()
     @app_commands.allowed_installs(guilds=True)
-    # @app_commands.choices(eventType=[
-    #     app_commands.Choice(name="Audit Log Entry Created Event", value=ListenEventType.ON_AUDIT_LOG_ENTRY)
-    # ])
-    async def notifymeon(self, ctx: commands.Context, eventType: ListenEventType) -> None:
-        """Register a notification for yourself on event occurrence.
+    async def notifymeon(self, ctx: commands.Context) -> None:
+        """ Handle event notifications """
+        pass
 
-        **Event types:**
-        - `audit_log_entry`: on Guild Audit Log Entry Creation
-
-        **Examples:**
-        - `[p]notifymeon audit_log_entry`
-        """
+    @notifymeon.command()
+    @commands.guild_only()
+    @app_commands.allowed_installs(guilds=True)
+    async def list(self, ctx: commands.Context) -> None:
+        events = await self.load_config(ctx.guild)
         user_id = ctx.author.id
-        await self.load_config(ctx.guild)
-        events = self.guild_events[ctx.guild]
+
+        typeList = ",".join([ eventType.value for (eventType, users) in events.items() if user_id in users ])
+        await ctx.send(_("Currently listening to events:\n`{typeList}`").format(typeList=typeList))
+
+    @notifymeon.command()
+    @commands.guild_only()
+    @app_commands.allowed_installs(guilds=True)
+    async def auditlogentry(self, ctx: commands.Context) -> None:
+        """Notify on audit log entry"""
+        await self._register_event_notification(ctx, ListenEventType.ON_AUDIT_LOG_ENTRY)
+
+    async def _register_event_notification(self, ctx: commands.Context, eventType: ListenEventType) -> None:
+        user_id = ctx.author.id
+        events = await self.load_config(ctx.guild)
 
         if eventType not in events:
             events[eventType] = set()
@@ -84,22 +93,20 @@ class NotifyMeOn(commands.Cog):
             events[eventType].add(user_id)
             await ctx.send(_("Will notify you on any `{eventType}` events in this Guild").format(eventType=eventType.value))
 
-        await self.save_config(ctx.guild)
+        await self.save_events(ctx.guild)
 
-
+    @notifymeon.command()
     @commands.guild_only()
-    @commands.hybrid_command()
     @app_commands.allowed_installs(guilds=True)
-    async def testauditlognotification(self, ctx: commands.Context, num: int = 1) -> None:
+    async def replayauditlognotifications(self, ctx: commands.Context, num: int = 1) -> None:
+        """Replay last n audit log notifications (test)"""
         limit = max(min(num, 50), 1)
         async for entry in ctx.guild.audit_logs(limit=limit):
             await ctx.author.send(embed=await self.auditLogEntryToEmbed(entry))
 
     @commands.Cog.listener()
     async def on_audit_log_entry_create(self, entry: discord.AuditLogEntry):
-
-        await self.load_config(entry.guild)
-        events = self.guild_events[entry.guild]
+        events = await self.load_config(entry.guild)
 
         if ListenEventType.ON_AUDIT_LOG_ENTRY not in events:
             return;
