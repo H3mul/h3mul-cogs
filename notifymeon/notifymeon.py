@@ -121,6 +121,7 @@ class NotifyMeOn(commands.Cog):
 
     @notifymeon.group(invoke_without_command=True)
     @commands.guild_only()
+    @commands.has_permissions(administrator = True)
     @app_commands.allowed_installs(guilds=True)
     async def auditlogentry(self, ctx: commands.Context) -> None:
         """ Notify on audit log entry  _([p]help for more)_ """
@@ -144,6 +145,7 @@ class NotifyMeOn(commands.Cog):
 
     @auditlogentry.command()
     @commands.guild_only()
+    @commands.has_permissions(administrator = True)
     @app_commands.allowed_installs(guilds=True)
     async def filteraction(self, ctx: commands.Context, auditlogaction: str) -> None:
         """Filter audit log entry from notifications by action type"""
@@ -172,6 +174,7 @@ class NotifyMeOn(commands.Cog):
 
     @auditlogentry.command()
     @commands.guild_only()
+    @commands.has_permissions(administrator = True)
     @app_commands.allowed_installs(guilds=True)
     async def replay(self, ctx: commands.Context, num: int = 1) -> None:
         """Replay last n audit log notifications (test)"""
